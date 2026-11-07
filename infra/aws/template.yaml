@@ -200,9 +200,13 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          set -euxo pipefail
+          set -euo pipefail
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io docker-compose-v2 git curl awscli
+          DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io docker-compose-v2 git curl unzip
+          curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip
+          unzip -q /tmp/awscliv2.zip -d /tmp
+          /tmp/aws/install
+          rm -rf /tmp/aws /tmp/awscliv2.zip
           systemctl enable --now docker
           mkdir -p /opt/vegah
           git clone --depth 1 https://github.com/${GitHubOwner}/${GitHubRepository}.git /opt/vegah/source
