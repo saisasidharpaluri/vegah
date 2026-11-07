@@ -28,6 +28,8 @@ docker compose up --build
 
 Open [http://localhost](http://localhost). Submit a sample task and watch it complete. Stop with `Ctrl+C`; containers use restart policies. PostgreSQL and Redis data live in named Docker volumes and survive container replacement. To intentionally reset local data, use `docker compose down -v`.
 
+The dashboard shows API liveness and combined PostgreSQL/Redis readiness, the request path, and the current job result. Recent jobs are stored in the current browser as IDs only; clearing that list does not delete server records. For frontend-only development, run `npm run dev --workspace=@vegah/web` after installing the root lockfile dependencies. The starter reference and its MIT notice are recorded in `apps/web/TEMPLATE-NOTICE.md`.
+
 The `.env.example` password is for local development only. Do not reuse it in a public environment. `.env` is ignored by Git.
 
 ## Configuration
