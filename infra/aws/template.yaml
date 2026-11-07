@@ -10,7 +10,7 @@ Parameters:
     Default: vegah
   InstanceType:
     Type: String
-    Default: t3.medium
+    Default: t3.small
     AllowedValues: [t3.small, t3.medium]
   ImagePrefix:
     Type: String
