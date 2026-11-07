@@ -161,7 +161,7 @@ Resources:
       ImageTagMutability: IMMUTABLE
       ImageScanningConfiguration: { ScanOnPush: true }
       LifecyclePolicy:
-        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Expire assessment images after the seven-day demo","selection":{"tagStatus":"tagged","tagPatternList":["*"],"countType":"sinceImagePushed","countUnit":"days","countNumber":7},"action":{"type":"expire"}},{"rulePriority":2,"description":"Keep at most ten recent releases","selection":{"tagStatus":"tagged","tagPatternList":["*"],"countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
+        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Expire assessment images after the seven-day demo","selection":{"tagStatus":"tagged","tagPatternList":["*"],"countType":"sinceImagePushed","countUnit":"days","countNumber":7},"action":{"type":"expire"}}]}'
   ApiRepository:
     Type: AWS::ECR::Repository
     Properties:
@@ -169,7 +169,7 @@ Resources:
       ImageTagMutability: IMMUTABLE
       ImageScanningConfiguration: { ScanOnPush: true }
       LifecyclePolicy:
-        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Expire assessment images after the seven-day demo","selection":{"tagStatus":"tagged","tagPatternList":["*"],"countType":"sinceImagePushed","countUnit":"days","countNumber":7},"action":{"type":"expire"}},{"rulePriority":2,"description":"Keep at most ten recent releases","selection":{"tagStatus":"tagged","tagPatternList":["*"],"countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
+        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Expire assessment images after the seven-day demo","selection":{"tagStatus":"tagged","tagPatternList":["*"],"countType":"sinceImagePushed","countUnit":"days","countNumber":7},"action":{"type":"expire"}}]}'
   WorkerRepository:
     Type: AWS::ECR::Repository
     Properties:
@@ -177,7 +177,7 @@ Resources:
       ImageTagMutability: IMMUTABLE
       ImageScanningConfiguration: { ScanOnPush: true }
       LifecyclePolicy:
-        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Expire assessment images after the seven-day demo","selection":{"tagStatus":"tagged","tagPatternList":["*"],"countType":"sinceImagePushed","countUnit":"days","countNumber":7},"action":{"type":"expire"}},{"rulePriority":2,"description":"Keep at most ten recent releases","selection":{"tagStatus":"tagged","tagPatternList":["*"],"countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
+        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Expire assessment images after the seven-day demo","selection":{"tagStatus":"tagged","tagPatternList":["*"],"countType":"sinceImagePushed","countUnit":"days","countNumber":7},"action":{"type":"expire"}}]}'
   AppInstance:
     Type: AWS::EC2::Instance
     DependsOn: AttachGateway
