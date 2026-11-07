@@ -185,7 +185,7 @@ Resources:
       ImageId: '{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}'
       InstanceType: !Ref InstanceType
       CreditSpecification:
-        CpuCredits: standard
+        CPUCredits: standard
       InstanceInitiatedShutdownBehavior: terminate
       IamInstanceProfile: !Ref InstanceProfile
       SubnetId: !Ref PublicSubnet
