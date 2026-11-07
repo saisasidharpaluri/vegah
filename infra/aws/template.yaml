@@ -161,7 +161,7 @@ Resources:
       ImageTagMutability: IMMUTABLE
       ImageScanningConfiguration: { ScanOnPush: true }
       LifecyclePolicy:
-        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Keep recent release tags for rollback","selection":{"tagStatus":"tagged","tagPrefixList":[""],"countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
+        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Expire assessment images after the seven-day demo","selection":{"tagStatus":"tagged","tagPrefixList":[""],"countType":"sinceImagePushed","countUnit":"days","countNumber":7},"action":{"type":"expire"}},{"rulePriority":2,"description":"Keep at most ten recent releases","selection":{"tagStatus":"tagged","tagPrefixList":[""],"countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
   ApiRepository:
     Type: AWS::ECR::Repository
     Properties:
@@ -169,7 +169,7 @@ Resources:
       ImageTagMutability: IMMUTABLE
       ImageScanningConfiguration: { ScanOnPush: true }
       LifecyclePolicy:
-        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Keep recent release tags for rollback","selection":{"tagStatus":"tagged","tagPrefixList":[""],"countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
+        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Expire assessment images after the seven-day demo","selection":{"tagStatus":"tagged","tagPrefixList":[""],"countType":"sinceImagePushed","countUnit":"days","countNumber":7},"action":{"type":"expire"}},{"rulePriority":2,"description":"Keep at most ten recent releases","selection":{"tagStatus":"tagged","tagPrefixList":[""],"countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
   WorkerRepository:
     Type: AWS::ECR::Repository
     Properties:
@@ -177,7 +177,7 @@ Resources:
       ImageTagMutability: IMMUTABLE
       ImageScanningConfiguration: { ScanOnPush: true }
       LifecyclePolicy:
-        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Keep recent release tags for rollback","selection":{"tagStatus":"tagged","tagPrefixList":[""],"countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
+        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Expire assessment images after the seven-day demo","selection":{"tagStatus":"tagged","tagPrefixList":[""],"countType":"sinceImagePushed","countUnit":"days","countNumber":7},"action":{"type":"expire"}},{"rulePriority":2,"description":"Keep at most ten recent releases","selection":{"tagStatus":"tagged","tagPrefixList":[""],"countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
   AppInstance:
     Type: AWS::EC2::Instance
     DependsOn: AttachGateway
@@ -186,6 +186,7 @@ Resources:
       InstanceType: !Ref InstanceType
       CreditSpecification:
         CpuCredits: standard
+      InstanceInitiatedShutdownBehavior: terminate
       IamInstanceProfile: !Ref InstanceProfile
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds: [!Ref AppSecurityGroup]
@@ -221,6 +222,25 @@ Resources:
           EOF
           chmod 0600 /opt/vegah/.env.production
           chown -R ubuntu:ubuntu /opt/vegah
+          expires_at=$(date -u -d '+7 days' '+%Y-%m-%d %H:%M:%S UTC')
+          cat > /etc/systemd/system/vegah-expire.service <<'EOF'
+          [Unit]
+          Description=End the seven-day VEGAH assessment host window
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/sbin/shutdown -h now
+          EOF
+          cat > /etc/systemd/system/vegah-expire.timer <<EOF
+          [Unit]
+          Description=Terminate the VEGAH assessment host after seven days
+          [Timer]
+          OnCalendar=$expires_at
+          Persistent=true
+          [Install]
+          WantedBy=timers.target
+          EOF
+          systemctl daemon-reload
+          systemctl enable --now vegah-expire.timer
           systemctl restart amazon-ssm-agent || true
       Tags:
         - Key: Name
