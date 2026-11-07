@@ -1,0 +1,120 @@
+name: Build and deploy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Existing image SHA to redeploy for rollback
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vegah-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+
+  publish:
+    if: (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.image_tag == '')) && vars.AWS_DEPLOY_ROLE_ARN != ''
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image_tag: ${{ steps.release.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS access with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Sign in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+      - name: Select release tag
+        id: release
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.image_tag }}" ]]; then
+            tag="${{ inputs.image_tag }}"
+            if [[ ! "$tag" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "image_tag must be a 40-character commit SHA" >&2
+              exit 1
+            fi
+          else
+            tag="${GITHUB_SHA}"
+          fi
+          echo "image_tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Build and publish web image
+        run: |
+          docker build -f apps/web/Dockerfile -t "${{ steps.ecr.outputs.registry }}/vegah-web:${{ steps.release.outputs.image_tag }}" .
+          docker push "${{ steps.ecr.outputs.registry }}/vegah-web:${{ steps.release.outputs.image_tag }}"
+      - name: Build and publish API image
+        run: |
+          docker build -f apps/api/Dockerfile -t "${{ steps.ecr.outputs.registry }}/vegah-api:${{ steps.release.outputs.image_tag }}" .
+          docker push "${{ steps.ecr.outputs.registry }}/vegah-api:${{ steps.release.outputs.image_tag }}"
+      - name: Build and publish worker image
+        run: |
+          docker build -f apps/worker/Dockerfile -t "${{ steps.ecr.outputs.registry }}/vegah-worker:${{ steps.release.outputs.image_tag }}" .
+          docker push "${{ steps.ecr.outputs.registry }}/vegah-worker:${{ steps.release.outputs.image_tag }}"
+
+  deploy:
+    if: always() && vars.AWS_DEPLOY_ROLE_ARN != '' && vars.EC2_INSTANCE_ID != '' && (needs.publish.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.image_tag != ''))
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Configure AWS access with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Request deployment through Systems Manager
+        env:
+          INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || needs.publish.outputs.image_tag }}
+        run: |
+          if [[ ! "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Deployment tag must be a 40-character commit SHA" >&2
+            exit 1
+          fi
+          command_id=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters "commands=[\"sudo /opt/vegah/scripts/deploy.sh $IMAGE_TAG\"]" \
+            --query 'Command.CommandId' --output text)
+          echo "Deployment command: $command_id"
+          for attempt in $(seq 1 60); do
+            status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || true)
+            case "$status" in
+              Success) exit 0 ;;
+              Failed|Cancelled|TimedOut) aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --output json; exit 1 ;;
+            esac
+            sleep 5
+          done
+          echo "Timed out waiting for deployment"
+          exit 1

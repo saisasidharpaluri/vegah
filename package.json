@@ -1,0 +1,20 @@
+{
+  "name": "vegah-intern-assessment",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": ["apps/web", "apps/api", "apps/worker"],
+  "scripts": {
+    "build": "npm run build --workspace=@vegah/api && npm run build --workspace=@vegah/worker && npm run build --workspace=@vegah/web",
+    "test": "npm run test --workspace=@vegah/worker && npm run test --workspace=@vegah/api",
+    "check": "npm run test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "@types/react": "^19.0.3",
+    "@types/react-dom": "^19.0.2",
+    "tsx": "^4.19.2",
+    "typescript": "~5.7.3"
+  },
+  "engines": { "node": ">=22 <23", "npm": ">=10" }
+}

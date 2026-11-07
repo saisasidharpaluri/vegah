@@ -1,0 +1,15 @@
+{
+  "name": "@vegah/worker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "test": "tsx --test src/*.test.ts"
+  },
+  "dependencies": {
+    "bullmq": "^5.34.10",
+    "ioredis": "^5.4.2",
+    "pg": "^8.13.1"
+  }
+}

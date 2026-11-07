@@ -1,0 +1,9 @@
+:80 {
+	@api path /api/*
+	reverse_proxy @api api:3001
+
+	@health path /health/*
+	reverse_proxy @health api:3001
+
+	reverse_proxy web:3000
+}

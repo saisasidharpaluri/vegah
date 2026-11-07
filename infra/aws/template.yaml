@@ -1,0 +1,240 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Single-host VEGAH demo environment for the practical technical assessment.
+
+Parameters:
+  GitHubOwner:
+    Type: String
+    Default: saisasidharpaluri
+  GitHubRepository:
+    Type: String
+    Default: vegah
+  InstanceType:
+    Type: String
+    Default: t3.medium
+    AllowedValues: [t3.small, t3.medium]
+  ImagePrefix:
+    Type: String
+    Default: vegah
+
+Resources:
+  DemoVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.42.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags: [{ Key: Name, Value: vegah-assessment-vpc }]
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DemoVpc
+      CidrBlock: 10.42.1.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags: [{ Key: Name, Value: vegah-assessment-public }]
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags: [{ Key: Name, Value: vegah-assessment-igw }]
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref DemoVpc
+      InternetGatewayId: !Ref InternetGateway
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DemoVpc
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  SubnetRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public HTTP only; administration uses Systems Manager.
+      VpcId: !Ref DemoVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags: [{ Key: Name, Value: vegah-assessment-app }]
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: PullAssessmentImages
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [ecr:GetAuthorizationToken]
+                Resource: '*'
+              - Effect: Allow
+                Action: [ecr:BatchCheckLayerAvailability, ecr:GetDownloadUrlForLayer, ecr:BatchGetImage]
+                Resource:
+                  - !GetAtt WebRepository.Arn
+                  - !GetAtt ApiRepository.Arn
+                  - !GetAtt WorkerRepository.Arn
+      Tags: [{ Key: Project, Value: vegah-assessment }]
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref InstanceRole]
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+      ThumbprintList: [6938fd4d98bab03faadb97b34396831e3780aea1]
+      Tags: [{ Key: Project, Value: vegah-assessment }]
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: vegah-assessment-github-deploy
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubOwner}/${GitHubRepository}:ref:refs/heads/main'
+      Policies:
+        - PolicyName: DeployAssessmentInstance
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [ssm:SendCommand]
+                Resource:
+                  - arn:aws:ssm:*::document/AWS-RunShellScript
+              - Effect: Allow
+                Action: [ssm:SendCommand]
+                Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${AppInstance}'
+              - Effect: Allow
+                Action: [ssm:GetCommandInvocation]
+                Resource: '*'
+              - Effect: Allow
+                Action: [ecr:GetAuthorizationToken]
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:CompleteLayerUpload
+                  - ecr:InitiateLayerUpload
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                Resource:
+                  - !GetAtt WebRepository.Arn
+                  - !GetAtt ApiRepository.Arn
+                  - !GetAtt WorkerRepository.Arn
+      Tags: [{ Key: Project, Value: vegah-assessment }]
+  WebRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: vegah-web
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration: { ScanOnPush: true }
+      LifecyclePolicy:
+        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Keep recent release tags for rollback","selection":{"tagStatus":"tagged","tagPrefixList":[""],"countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
+  ApiRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: vegah-api
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration: { ScanOnPush: true }
+      LifecyclePolicy:
+        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Keep recent release tags for rollback","selection":{"tagStatus":"tagged","tagPrefixList":[""],"countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
+  WorkerRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: vegah-worker
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration: { ScanOnPush: true }
+      LifecyclePolicy:
+        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Keep recent release tags for rollback","selection":{"tagStatus":"tagged","tagPrefixList":[""],"countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
+  AppInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: AttachGateway
+    Properties:
+      ImageId: '{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}'
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds: [!Ref AppSecurityGroup]
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io docker-compose-v2 git curl awscli
+          systemctl enable --now docker
+          mkdir -p /opt/vegah
+          git clone --depth 1 https://github.com/${GitHubOwner}/${GitHubRepository}.git /opt/vegah/source
+          cp -a /opt/vegah/source/. /opt/vegah/
+          rm -rf /opt/vegah/source
+          install -d -m 0750 /opt/vegah
+          chmod +x /opt/vegah/scripts/deploy.sh
+          DB_PASSWORD=$(openssl rand -hex 24)
+          cat > /opt/vegah/.env.production <<EOF
+          POSTGRES_USER=vegah
+          POSTGRES_PASSWORD=$DB_PASSWORD
+          POSTGRES_DB=vegah
+          IMAGE_TAG=bootstrap
+          IMAGE_PREFIX=${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ImagePrefix}
+          AWS_REGION=${AWS::Region}
+          WEB_PORT=80
+          EOF
+          chmod 0600 /opt/vegah/.env.production
+          chown -R ubuntu:ubuntu /opt/vegah
+          systemctl restart amazon-ssm-agent || true
+      Tags:
+        - Key: Name
+          Value: vegah-assessment-demo
+        - Key: Project
+          Value: vegah-assessment
+
+Outputs:
+  PublicUrl:
+    Description: Public HTTP URL for the demo app after first successful deployment.
+    Value: !Sub 'http://${AppInstance.PublicIp}'
+  InstanceId:
+    Value: !Ref AppInstance
+  GitHubDeployRoleArn:
+    Value: !GetAtt GitHubDeployRole.Arn
+  EcrRegistry:
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com'
+  Region:
+    Value: !Ref AWS::Region

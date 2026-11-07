@@ -1,0 +1,11 @@
+{
+  "name": "@vegah/web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": { "build": "next build", "start": "next start -p 3000" },
+  "dependencies": {
+    "next": "^16.4.5",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}
