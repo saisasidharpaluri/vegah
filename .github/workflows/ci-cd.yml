@@ -35,7 +35,7 @@ jobs:
         run: docker compose config --quiet
 
   publish:
-    if: (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.image_tag == '')) && vars.AWS_DEPLOY_ROLE_ARN != ''
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.image_tag == '')
     needs: verify
     runs-on: ubuntu-latest
     permissions:
@@ -48,8 +48,8 @@ jobs:
       - name: Configure AWS access with GitHub OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN || 'arn:aws:iam::852302874241:role/vegah-assessment-github-deploy' }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
       - name: Sign in to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
         id: ecr
@@ -84,7 +84,7 @@ jobs:
           docker push "${{ steps.ecr.outputs.registry }}/vegah-worker:${{ steps.release.outputs.image_tag }}"
 
   deploy:
-    if: always() && vars.AWS_DEPLOY_ROLE_ARN != '' && vars.EC2_INSTANCE_ID != '' && (needs.publish.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.image_tag != ''))
+    if: always() && (needs.publish.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.image_tag != ''))
     needs: publish
     runs-on: ubuntu-latest
     permissions:
@@ -94,11 +94,11 @@ jobs:
       - name: Configure AWS access with GitHub OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN || 'arn:aws:iam::852302874241:role/vegah-assessment-github-deploy' }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
       - name: Request deployment through Systems Manager
         env:
-          INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID || 'i-0c650aae447683aa7' }}
           IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || needs.publish.outputs.image_tag }}
         run: |
           if [[ ! "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]]; then

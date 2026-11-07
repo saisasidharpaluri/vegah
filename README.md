@@ -61,8 +61,7 @@ Before deployment:
 
 1. Push the source to `saisasidharpaluri/vegah` and ensure the workflow is enabled. With no AWS deploy role configured, CI verification runs while image publication and deployment are skipped.
 2. Deploy `infra/aws/template.yaml` in `us-east-1`. It creates a single-AZ VPC, Ubuntu EC2 host, encrypted 20 GB EBS volume, port-80-only security group, ECR repositories, and scoped Systems Manager/ECR/GitHub OIDC roles. The host clones the repository during bootstrap.
-3. Set repository variables `AWS_DEPLOY_ROLE_ARN`, `AWS_REGION`, and `EC2_INSTANCE_ID` from the stack outputs. Run **Actions → Build and deploy → Run workflow** with `image_tag` blank for the first image build and deployment.
-4. Later pushes to `main` deploy automatically. For rollback, run the workflow with a previously published 40-character commit SHA.
+3. The workflow has the stack's role, region, and instance ID as public fallbacks; optional repository variables with those names override them if you recreate the stack. A push to `main` builds, publishes, and deploys automatically. For rollback, run **Actions → Build and deploy → Run workflow** with a previously published 40-character commit SHA.
 ## AWS deployment architecture and cost
 
 The assessment demo uses one EC2 host running the same Compose stack as local development. PostgreSQL and Redis are not public; PostgreSQL data and Redis AOF files use persistent Docker volumes on the encrypted EBS volume. Systems Manager handles administration; inbound SSH is not opened. Private images are stored in ECR and pulled by the instance profile. The public URL is HTTP on the EC2 address because no custom domain was provided. This is a low-traffic assessment environment, not a highly available production service.
