@@ -122,8 +122,7 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-              StringLike:
-                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubOwner}/${GitHubRepository}:ref:refs/heads/main'
+                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubOwner}@139967742/${GitHubRepository}@1449153633:ref:refs/heads/main'
       Policies:
         - PolicyName: DeployAssessmentInstance
           PolicyDocument:
