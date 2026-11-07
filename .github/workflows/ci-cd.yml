@@ -55,10 +55,13 @@ jobs:
         id: ecr
       - name: Select release tag
         id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_IMAGE_TAG: ${{ inputs.image_tag }}
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.image_tag }}" ]]; then
-            tag="${{ inputs.image_tag }}"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && -n "$REQUESTED_IMAGE_TAG" ]]; then
+            tag="$REQUESTED_IMAGE_TAG"
             if [[ ! "$tag" =~ ^[0-9a-f]{40}$ ]]; then
               echo "image_tag must be a 40-character commit SHA" >&2
               exit 1

@@ -67,7 +67,7 @@ Before deployment:
 
 The assessment demo uses one EC2 host running the same Compose stack as local development. PostgreSQL and Redis are not public; PostgreSQL data and Redis AOF files use persistent Docker volumes on the encrypted EBS volume. Systems Manager handles administration; inbound SSH is not opened. Private images are stored in ECR and pulled by the instance profile. The public URL is HTTP on the EC2 address because no custom domain was provided. This is a low-traffic assessment environment, not a highly available production service.
 
-The intended live window is seven days with a $10 credit cap. EC2, the public IPv4 address, EBS storage, ECR image storage, and outbound transfer can all contribute to cost. Check the AWS Pricing Calculator and current account usage before stack creation, then monitor actual spend and remove the stack before reaching the cap. This budget is an estimate; AWS Budgets alerts are not a hard spending stop.
+The intended live window is seven days with a $10 project cost cap. At listed `us-east-1` rates, a `t3.medium` at $0.0418/hour is about $7.02 for 168 hours, one public IPv4 address at $0.005/hour is $0.84, and a 20 GB gp3 volume at $0.08/GB-month is about $0.37 for seven days: approximately **$8.24** before ECR storage, taxes, or unusual traffic. The instance uses standard CPU credits so sustained CPU use is throttled instead of incurring unlimited-mode credit charges. Check current account usage and image storage before stack creation, then monitor actual spend and remove the stack before reaching the cap. This is an estimate; AWS Budgets alerts are not a hard spending stop.
 
 ## Troubleshooting and recovery
 
